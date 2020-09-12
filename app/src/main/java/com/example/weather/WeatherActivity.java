@@ -25,6 +25,7 @@ import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.example.weather.Service.RxWeatherService;
 import com.example.weather.gson.Forecast;
 import com.example.weather.gson.Weather;
 import com.example.weather.util.HttpUtil;
@@ -32,9 +33,13 @@ import com.example.weather.util.Utility;
 
 import java.io.IOException;
 
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.Response;
+import okhttp3.ResponseBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.adapter.rxjava.RxJavaCallAdapterFactory;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 public class WeatherActivity extends AppCompatActivity {
 
@@ -94,20 +99,20 @@ public class WeatherActivity extends AppCompatActivity {
         swipeRefresh = (SwipeRefreshLayout) findViewById(R.id.swipe_refresh);
         swipeRefresh.setColorSchemeResources(R.color.colorPrimary);
         //缓存
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        String weatherString = prefs.getString("weather", null);
-        //Log.d(TAG,weatherString); //查询缓存
-        if (weatherString != null) {
-            // 有缓存时直接解析天气数据
-            Weather weather = Utility.handleWeatherResponse(weatherString);
-            mWeatherId = weather.basic.weatherId;
-            showWeatherInfo(weather);
-        } else {
+//        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+//        String weatherString = prefs.getString("weather", null);
+//        Log.d("TAG",weatherString); //查询缓存
+//        if (weatherString != null) {
+//            // 有缓存时直接解析天气数据
+//            Weather weather = Utility.handleWeatherResponse(weatherString);
+//            mWeatherId = weather.basic.weatherId;
+//            showWeatherInfo(weather);
+//        } else {
             // 无缓存时去服务器查询天气
-            mWeatherId = getIntent().getStringExtra("weather_id");
-            weatherLayout.setVisibility(View.INVISIBLE);
-            requestWeather(mWeatherId);
-        }
+        mWeatherId = getIntent().getStringExtra("weather_id");
+        weatherLayout.setVisibility(View.INVISIBLE);
+        requestWeather(mWeatherId);
+//        }
         swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
             public void onRefresh() {
@@ -143,44 +148,51 @@ public class WeatherActivity extends AppCompatActivity {
     }
 
     public void requestWeather(final String weatherId) {
-        String weatherUrl = "http://guolin.tech/api/weather?cityid=" + weatherId + "&key=bc0418b57b2d4918819d3974ac1285d9";
-        Log.d(TAG,weatherUrl);
-        HttpUtil.sendOkHttpRequest(weatherUrl, new Callback() {
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                final String responseText = response.body().string();
-                final Weather weather = Utility.handleWeatherResponse(responseText);
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (weather != null && "ok".equals(weather.status)) {
-                            //存进缓存
-                            SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
-                            editor.putString("weather", responseText);
-                            editor.apply();
-                            mWeatherId = weather.basic.weatherId;
-                            showWeatherInfo(weather);
-                        } else {
-                            Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
-                        }
-                        swipeRefresh.setRefreshing(false);
-                    }
-                });
-            }
-
-            @Override
-            public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
-                        swipeRefresh.setRefreshing(false);
-                    }
-                });
-            }
-        });
+        /***
+        //okhttp
+         ***/
+//        String weatherUrl = "http://guolin.tech/api/weather?cityid=" + weatherId + "&key=bc0418b57b2d4918819d3974ac1285d9";
+//        HttpUtil.sendOkHttpRequest(weatherUrl, new Callback() {
+//            @Override
+//            public void onResponse(Call call, Response response) throws IOException {
+//                final String responseText = response.body().string();
+//                final Weather weather = Utility.handleWeatherResponse(responseText);
+//                runOnUiThread(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        if (weather != null && "ok".equals(weather.status)) {
+//                            //存进缓存
+//                            SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
+//                            editor.putString("weather", responseText);
+//                            editor.apply();
+//                            mWeatherId = weather.basic.weatherId;
+//                            showWeatherInfo(weather);
+//                        } else {
+//                            Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
+//                        }
+//                        swipeRefresh.setRefreshing(false);
+//                    }
+//                });
+//            }
+//
+//            @Override
+//            public void onFailure(Call call, IOException e) {
+//                e.printStackTrace();
+//                runOnUiThread(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
+//                        swipeRefresh.setRefreshing(false);
+//                    }
+//                });
+//            }
+//        });
         //loadBingPic();
+
+         /***
+         //retrofit
+         ***/
+        doRequestByRxRetrofit("http://guolin.tech/api/",weatherId);
     }
 
     /**
@@ -221,5 +233,45 @@ public class WeatherActivity extends AppCompatActivity {
         weatherLayout.setVisibility(View.VISIBLE);
         //Intent intent = new Intent(this, AutoUpdateService.class);
         //startService(intent);
+    }
+
+    public void doRequestByRxRetrofit(String address,String county) {
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl(address)//基础URL 建议以 / 结尾
+                .addConverterFactory(GsonConverterFactory.create())//设置 Json 转换器
+                .addCallAdapterFactory(RxJavaCallAdapterFactory.create())//RxJava 适配器
+                .build();
+        RxWeatherService rxjavaService = retrofit.create(RxWeatherService.class);
+        retrofit2.Call<ResponseBody> call = rxjavaService.getMessage("weather?cityid=" + county);
+
+        call.enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(retrofit2.Call<ResponseBody> call, Response<ResponseBody> response) {
+                try {
+                    final Weather weather = Utility.handleWeatherResponse(response.body().string());
+                    Log.d("TAG", weather.status);
+                    runOnUiThread(new Runnable() {
+                    @Override
+                        public void run() {
+                            if (weather != null && "ok".equals(weather.status)) {
+                                //存进缓存
+                                mWeatherId = weather.basic.weatherId;
+                                showWeatherInfo(weather);
+                            } else {
+                                Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
+                            }
+                            swipeRefresh.setRefreshing(false);
+                        }
+                    });
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {
+
+            }
+        });
     }
 }
