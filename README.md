@@ -4,3 +4,6 @@
 
 ## 目前效果如下
 ![](weatherAPP.gif)
+
+## Retrofit的坑
+[为何 response.body().string() 只能调用一次？](https://blog.csdn.net/my_truelove/article/details/80133556)

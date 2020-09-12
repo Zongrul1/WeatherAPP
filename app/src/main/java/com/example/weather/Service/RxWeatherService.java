@@ -8,6 +8,6 @@ import retrofit2.http.*;
 import rx.Observable;
 
 public interface RxWeatherService {
-    @GET
-    Call<ResponseBody> getMessage(@Url String url);
+    @GET("weather")
+    Call<ResponseBody> getMessage(@Query("cityid") String cityid);
 }

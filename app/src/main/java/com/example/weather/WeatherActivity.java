@@ -192,7 +192,35 @@ public class WeatherActivity extends AppCompatActivity {
          /***
          //retrofit
          ***/
-        doRequestByRxRetrofit("http://guolin.tech/api/",weatherId);
+        HttpUtil.doRequestByRxRetrofit("http://guolin.tech/api/", weatherId, new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(retrofit2.Call<ResponseBody> call, Response<ResponseBody> response) {
+                try {
+                    final String responseText = response.body().string();
+                    final Weather weather = Utility.handleWeatherResponse(responseText);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (weather != null && "ok".equals(weather.status)) {
+                                //存进缓存
+                                mWeatherId = weather.basic.weatherId;
+                                showWeatherInfo(weather);
+                            } else {
+                                Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
+                            }
+                            swipeRefresh.setRefreshing(false);
+                        }
+                    });
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {
+
+            }
+        });
     }
 
     /**
@@ -242,7 +270,7 @@ public class WeatherActivity extends AppCompatActivity {
                 .addCallAdapterFactory(RxJavaCallAdapterFactory.create())//RxJava 适配器
                 .build();
         RxWeatherService rxjavaService = retrofit.create(RxWeatherService.class);
-        retrofit2.Call<ResponseBody> call = rxjavaService.getMessage("weather?cityid=" + county);
+        retrofit2.Call<ResponseBody> call = rxjavaService.getMessage(county);
 
         call.enqueue(new Callback<ResponseBody>() {
             @Override
